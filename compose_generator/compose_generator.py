@@ -12,6 +12,9 @@ EXPECTED_ARGS = 3
 
 
 def generate_compose(output_file: str, num_clients: int) -> None:
+    """
+    Generates a Docker Compose file with the specified number of client services.
+    """
     base_config = read_file_content(BASE_PATH)
     networks_config = read_file_content(NETWORKS_PATH)
     client_template = read_file_content(CLIENT_PATH)
@@ -28,6 +31,9 @@ def generate_compose(output_file: str, num_clients: int) -> None:
 
 
 def main():
+    """
+    Main function to validate command-line arguments and generate the Docker Compose file.
+    """
     if not has_expected_number_of_arguments(sys.argv, EXPECTED_ARGS):
         logger.error(f"Usage: python3 {sys.argv[0]} <output_file> <num_clients>")
         sys.exit(1)

@@ -3,6 +3,9 @@ import sys
 
 
 def read_file_content(file_path: str) -> str:
+    """
+    Reads the content of a file and returns it as a string.
+    """
     try:
         with open(file_path, "r") as file:
             return file.read()
@@ -15,6 +18,9 @@ def read_file_content(file_path: str) -> str:
 
 
 def write_file_content(file_path: str, content: str) -> None:
+    """
+    Writes the given content to a file.
+    """
     try:
         with open(file_path, "w") as file:
             file.write(content)
