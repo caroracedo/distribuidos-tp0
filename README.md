@@ -233,3 +233,33 @@ make docker-compose-down
 #### Aspectos destacados de la solución
 
 * Se utilizaron volúmenes de Docker para montar los archivos de configuración (`config.ini` para el servidor y `config.yaml` para el cliente) dentro de los containers, permitiendo que cualquier cambio en estos archivos se refleje inmediatamente sin necesidad de reconstruir las imágenes.
+
+### Ejercicio 3
+
+#### Cómo ejecutar
+
+Para ejecutar el ejercicio 3, se debe correr el siguiente comando desde la raíz del proyecto:
+
+```bash
+./validar-echo-server.sh
+```
+
+Antes de ejecutar el script, se recomienda otorgarle permisos de ejecución:
+
+```bash
+chmod +x validar-echo-server.sh
+```
+
+Para verificar el correcto funcionamiento del sistema, se pueden ejecutar los siguientes pasos:
+
+```bash
+make docker-compose-up
+chmod +x validar-echo-server.sh
+./validar-echo-server.sh
+make docker-compose-down
+```
+
+#### Aspectos destacados de la solución
+
+* El script `validar-echo-server.sh` utiliza `netcat` para enviar un mensaje de prueba al servidor y verificar que la respuesta sea correcta.
+* Para evitar la necesidad de instalar `netcat` en la máquina host, se ejecuta un container temporal de `busybox` que se conecta a la red del proyecto y realiza la comunicación con el servidor.
