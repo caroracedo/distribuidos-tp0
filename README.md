@@ -179,3 +179,47 @@ Se proveen [pruebas automáticas](https://github.com/7574-sistemas-distribuidos/
 
 El incumplimiento de las pruebas es condición de desaprobación, pero su cumplimiento no es suficiente para la aprobación.  Se pide a los alumnos leer atentamente y **tener en cuenta** los criterios de corrección informados  [en el campus](https://campusgrado.fi.uba.ar/mod/page/view.php?id=73393).
 Respetar el formato y contenido las entradas de logs descritas en los ejercicios, pues son las que se chequean en cada uno de los tests.
+
+---
+
+## Sección Adicional
+
+### Ejercicio 1
+
+#### Cómo ejecutar
+
+Para ejecutar el ejercicio 1, se debe correr el siguiente comando desde la raíz del proyecto:
+
+```bash
+./generar-compose.sh <OUTPUT_FILE> <NUM_CLIENTS>
+```
+
+**Parámetros:**
+
+| Parámetro | Descripción |
+| --- | --- |
+| `<OUTPUT_FILE>` | Nombre del archivo que se generará. Ej: `docker-compose-dev.yaml`  |
+| `<NUM_CLIENTS>`  | Cantidad de clientes a instanciar (client1, client2, ...). Ej: `5` |
+
+Antes de ejecutar el script, se recomienda otorgarle permisos de ejecución:
+
+```bash
+chmod +x generar-compose.sh
+```
+
+Para verificar el correcto funcionamiento del sistema, se pueden ejecutar los siguientes pasos:
+
+```bash
+chmod +x generar-compose.sh
+./generar-compose.sh <OUTPUT_FILE> <NUM_CLIENTS>
+cat <OUTPUT_FILE>
+make docker-compose-up
+make docker-compose-logs
+make docker-compose-down
+```
+
+#### Aspectos destacados de la solución
+
+* El script `generar-compose.sh` genera dinámicamente un archivo de Docker Compose con la cantidad de clientes especificada por el usuario.
+* La generación del contenido se realiza mediante un subscript en Python (`compose_generator.py`), que escribe la configuración correspondiente en el archivo de salida.
+* Como referencia para las templates, se utilizó el archivo `docker-compose-dev.yaml` provisto en el esqueleto del proyecto, asegurando consistencia en la estructura.
