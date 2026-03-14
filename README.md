@@ -223,3 +223,13 @@ make docker-compose-down
 * El script `generar-compose.sh` genera dinámicamente un archivo de Docker Compose con la cantidad de clientes especificada por el usuario.
 * La generación del contenido se realiza mediante un subscript en Python (`compose_generator.py`), que escribe la configuración correspondiente en el archivo de salida.
 * Como referencia para las templates, se utilizó el archivo `docker-compose-dev.yaml` provisto en el esqueleto del proyecto, asegurando consistencia en la estructura.
+
+### Ejercicio 2
+
+#### Cómo ejecutar
+
+> La forma de ejecución es idéntica a la del ejercicio 1.
+
+#### Aspectos destacados de la solución
+
+* Se utilizaron volúmenes de Docker para montar los archivos de configuración (`config.ini` para el servidor y `config.yaml` para el cliente) dentro de los containers, permitiendo que cualquier cambio en estos archivos se refleje inmediatamente sin necesidad de reconstruir las imágenes.
