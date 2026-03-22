@@ -6,8 +6,11 @@ from .utils import Bet, store_bets
 
 
 class Server:
-    MSG_BET_STORED_SUCCESS = (
-        "action: apuesta_almacenada | result: success | dni: {dni} | numero: {numero}"
+    MSG_BATCH_RECEIVED_SUCCESS = (
+        "action: apuesta_recibida | result: success | cantidad: {cantidad}"
+    )
+    MSG_BATCH_RECEIVED_FAIL = (
+        "action: apuesta_recibida | result: fail | cantidad: {cantidad}"
     )
 
     def __init__(self, port, listen_backlog):
@@ -42,20 +45,18 @@ class Server:
     def __handle_client_connection(self, client_sock: socket) -> None:
         """
         Handle communication with a connected client.
-        The server receives a bet from the client, stores it and sends an ACK message back to the client.
-        If the client closes the connection, the server logs the event and continues to accept new connections. Any other exceptions are logged as errors.
+        The server receives a batch of bets from the client, stores it and sends an ACK message back to the client.
+        If the client closes the connection, the server logs the event and continues to accept new connections. Any other exceptions are logged as errors and an error message is sent back to the client.
         Finally, the client socket is closed to free resources.
         """
         try:
             while self._running:
                 _, data = Protocol.receive_message(client_sock)
 
-                bet = Bet(*data)
-                store_bets([bet])
+                batch = [Bet(*bet_line) for bet_line in data]
+                store_bets(batch)
                 logging.info(
-                    self.MSG_BET_STORED_SUCCESS.format(
-                        dni=bet.document, numero=bet.number
-                    )
+                    self.MSG_BATCH_RECEIVED_SUCCESS.format(cantidad=len(batch))
                 )
 
                 Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, [])
@@ -64,9 +65,10 @@ class Server:
                 "action: connection_closed | result: success | msg: Client closed the connection"
             )
         except Exception as e:
-            logging.error(
-                f"action: receive_bet_and_send_ack | result: fail | error: {e}"
-            )
+            try:
+                Protocol.send_message(client_sock, Protocol.MSG_TYPE_ERROR, [])
+            finally:
+                logging.error(self.MSG_BATCH_RECEIVED_FAIL.format(cantidad=len(batch)))
         finally:
             client_sock.close()
 

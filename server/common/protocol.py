@@ -11,13 +11,15 @@ class ProtocolError(Exception):
 
 
 class Protocol:
-    MSG_TYPE_BET = 1
+    MSG_TYPE_BATCH = 1
     MSG_TYPE_ACK = 2
+    MSG_TYPE_ERROR = 3
 
     TYPE_BYTES = 2
     LENGTH_BYTES = 4
 
     PAYLOAD_DELIMITER = ","
+    BATCH_DELIMITER = "\n"
 
     @staticmethod
     def recv_all(sock: socket, expected_length: int) -> bytes:
@@ -34,31 +36,34 @@ class Protocol:
         return data
 
     @staticmethod
-    def receive_message(sock: socket) -> tuple[int, list[str]]:
+    def receive_message(sock: socket) -> tuple[int, list[list[str]]]:
         """
         Reads a message from the socket, returning a tuple of (msgtype, payload).
         """
         msgtype_header = Protocol.recv_all(sock, Protocol.TYPE_BYTES)
         msgtype = int.from_bytes(msgtype_header, byteorder="big", signed=False)
-        if msgtype != Protocol.MSG_TYPE_BET:
+        if msgtype != Protocol.MSG_TYPE_BATCH:
             raise ProtocolError(f"Invalid message type: {msgtype}")
 
         length_header = Protocol.recv_all(sock, Protocol.LENGTH_BYTES)
         length = int.from_bytes(length_header, byteorder="big", signed=False)
 
         if length == 0:
-            return msgtype, []
+            return msgtype, [[]]
 
         payload = Protocol.recv_all(sock, length)
         data = payload.decode("utf-8")
-        return msgtype, data.split(Protocol.PAYLOAD_DELIMITER)
+        return msgtype, [
+            line.split(Protocol.PAYLOAD_DELIMITER)
+            for line in data.split(Protocol.BATCH_DELIMITER)
+        ]
 
     @staticmethod
     def send_message(sock: socket, msgtype: int, data: list[str]) -> None:
         """
         Construct and sends a message with the given type and data to the socket.
         """
-        if msgtype != Protocol.MSG_TYPE_ACK:
+        if msgtype not in (Protocol.MSG_TYPE_ACK, Protocol.MSG_TYPE_ERROR):
             raise ProtocolError(f"Invalid message type: {msgtype}")
 
         payload = Protocol.PAYLOAD_DELIMITER.join(data).encode("utf-8")
