@@ -1,9 +1,15 @@
 import socket
 import logging
 import signal
+from .protocol import Protocol
+from .utils import Bet, store_bets
 
 
 class Server:
+    MSG_BET_STORED_SUCCESS = (
+        "action: apuesta_almacenada | result: success | dni: {dni} | numero: {numero}"
+    )
+
     def __init__(self, port, listen_backlog):
         # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -33,24 +39,26 @@ class Server:
         finally:
             self._free_resources()
 
-    def __handle_client_connection(self, client_sock):
+    def __handle_client_connection(self, client_sock: socket) -> None:
         """
-        Read message from a specific client socket and closes the socket
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
+        Handle communication with a connected client.
+        It receives a bet from the client, stores it, and sends an acknowledgment back to the client. If any error occurs during this process, it logs the error and ensures the client socket is closed.
         """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode("utf-8")
-            addr = client_sock.getpeername()
+            _, data = Protocol.receive_message(client_sock)
+
+            bet = Bet(*data.split(Protocol.PAYLOAD_DELIMITER))
+
+            store_bets([bet])
             logging.info(
-                f"action: receive_message | result: success | ip: {addr[0]} | msg: {msg}"
+                self.MSG_BET_STORED_SUCCESS.format(dni=bet.document, numero=bet.number)
             )
-            # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode("utf-8"))
-        except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
+
+            Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, "")
+        except Exception as e:
+            logging.error(
+                f"action: receive_bet_and_send_ack | result: fail | error: {e}"
+            )
         finally:
             client_sock.close()
 
