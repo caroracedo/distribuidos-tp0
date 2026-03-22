@@ -263,3 +263,38 @@ make docker-compose-down
 
 * El script `validar-echo-server.sh` utiliza `netcat` para enviar un mensaje de prueba al servidor y verificar que la respuesta sea correcta.
 * Para evitar la necesidad de instalar `netcat` en la máquina host, se ejecuta un container temporal de `busybox` que se conecta a la red del proyecto y realiza la comunicación con el servidor.
+
+### Ejercicio 4
+
+#### Cómo ejecutar
+
+Para verificar el correcto funcionamiento del _graceful shutdown_, se pueden ejecutar los siguientes pasos:
+
+```bash
+make docker-compose-up
+```
+
+En otra terminal, ejecutar:
+
+```bash
+make docker-compose-logs
+```
+
+Luego, para enviar la señal `SIGTERM` a los containers, se pueden utilizar los siguientes comandos:
+
+```bash
+# Para el servidor
+docker kill -s SIGTERM $(docker ps -q -f "name=server")
+
+# Para un cliente específico
+docker kill -s SIGTERM $(docker ps -q -f "name=client<N>")
+
+# Para ambos a la vez utilizando un timeout de 10 segundos antes de enviar SIGKILL
+docker compose -f docker-compose-dev.yaml down -t 10
+```
+
+#### Aspectos destacados de la solución
+
+* Se implementó el manejo de la señal `SIGTERM` tanto en el cliente (mediante `signal.Notify()`, Go) como en el servidor (mediante `signal.signal()`, Python).
+* Se registran logs al recibir la señal y se garantiza que todos los recursos se liberen correctamente antes de que la aplicación finalice.
+* El flag `-t` en `docker compose down` da tiempo de gracia antes de enviar `SIGKILL`.
