@@ -268,19 +268,19 @@ make docker-compose-down
 
 #### Cómo ejecutar
 
-Para verificar el correcto funcionamiento del _graceful shutdown_, se pueden ejecutar los siguientes pasos:
+Para verificar el correcto funcionamiento del _graceful shutdown_ (asumiendo que ya se generó el archivo de Docker Compose con la cantidad de clientes deseada), se debe correr el siguiente comando desde la raíz del proyecto:
 
 ```bash
 make docker-compose-up
 ```
 
-En otra terminal, ejecutar:
+Y en otra terminal, ejecutar:
 
 ```bash
 make docker-compose-logs
 ```
 
-Luego, para enviar la señal `SIGTERM` a los containers, se pueden utilizar los siguientes comandos:
+Luego, para enviar la señal `SIGTERM` a los containers y observar el comportamiento esperado, se pueden utilizar los siguientes comandos:
 
 ```bash
 # Para el servidor
@@ -291,6 +291,12 @@ docker kill -s SIGTERM $(docker ps -q -f "name=client<N>")
 
 # Para ambos a la vez utilizando un timeout de 10 segundos antes de enviar SIGKILL
 docker compose -f docker-compose-dev.yaml down -t 10
+```
+
+Finalmente, para detener los contenedores:
+
+```bash
+make docker-compose-down
 ```
 
 #### Aspectos destacados de la solución
