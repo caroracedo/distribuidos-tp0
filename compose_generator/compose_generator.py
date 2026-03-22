@@ -17,10 +17,11 @@ def generate_compose(output_file: str, num_clients: int) -> None:
     with open(BASE_PATH, "r") as base_file, open(
         NETWORKS_PATH, "r"
     ) as networks_file, open(CLIENT_PATH, "r") as client_file:
-        base_config = base_file.read()
+        base_template = base_file.read()
         networks_config = networks_file.read()
         client_template = client_file.read()
 
+    base_config = base_template.format(total_agencies=num_clients)
     clients_config = "".join(
         client_template.format(cli_id=i) for i in range(1, num_clients + 1)
     )

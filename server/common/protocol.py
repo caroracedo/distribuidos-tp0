@@ -14,6 +14,10 @@ class Protocol:
     MSG_TYPE_BATCH = 1
     MSG_TYPE_ACK = 2
     MSG_TYPE_ERROR = 3
+    MSG_TYPE_EOF = 4
+    MSG_TYPE_WINNERS_QUERY = 5
+    MSG_TYPE_WINNERS = 6
+    MSG_TYPE_WINNERS_NOT_READY = 7
 
     TYPE_BYTES = 2
     LENGTH_BYTES = 4
@@ -42,7 +46,11 @@ class Protocol:
         """
         msgtype_header = Protocol.recv_all(sock, Protocol.TYPE_BYTES)
         msgtype = int.from_bytes(msgtype_header, byteorder="big", signed=False)
-        if msgtype != Protocol.MSG_TYPE_BATCH:
+        if msgtype not in (
+            Protocol.MSG_TYPE_BATCH,
+            Protocol.MSG_TYPE_EOF,
+            Protocol.MSG_TYPE_WINNERS_QUERY,
+        ):
             raise ProtocolError(f"Invalid message type: {msgtype}")
 
         length_header = Protocol.recv_all(sock, Protocol.LENGTH_BYTES)
@@ -63,7 +71,12 @@ class Protocol:
         """
         Construct and sends a message with the given type and data to the socket.
         """
-        if msgtype not in (Protocol.MSG_TYPE_ACK, Protocol.MSG_TYPE_ERROR):
+        if msgtype not in (
+            Protocol.MSG_TYPE_ACK,
+            Protocol.MSG_TYPE_ERROR,
+            Protocol.MSG_TYPE_WINNERS_NOT_READY,
+            Protocol.MSG_TYPE_WINNERS,
+        ):
             raise ProtocolError(f"Invalid message type: {msgtype}")
 
         payload = Protocol.PAYLOAD_DELIMITER.join(data).encode("utf-8")

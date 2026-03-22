@@ -2,7 +2,7 @@ import socket
 import logging
 import signal
 from .protocol import Protocol, ConnectionClosedError
-from .utils import Bet, store_bets
+from .utils import Bet, store_bets, load_bets, has_won
 
 
 class Server:
@@ -12,8 +12,9 @@ class Server:
     MSG_BATCH_RECEIVED_FAIL = (
         "action: apuesta_recibida | result: fail | cantidad: {cantidad}"
     )
+    MSG_LOTTERY_SUCCESS = "action: sorteo | result: success"
 
-    def __init__(self, port, listen_backlog):
+    def __init__(self, port, listen_backlog, total_agencies):
         # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(("", port))
@@ -22,6 +23,12 @@ class Server:
         # Add signal handler for graceful shutdown and a flag to control the server loop
         self._running = True
         signal.signal(signal.SIGTERM, self._handle_sigterm)
+
+        # Add attributes to track the state of the lottery
+        self._agencies_finished = set()
+        self._lottery_done = False
+        self._winners_by_agency = {}
+        self._total_agencies = total_agencies
 
     def run(self):
         """
@@ -45,21 +52,23 @@ class Server:
     def __handle_client_connection(self, client_sock: socket) -> None:
         """
         Handle communication with a connected client.
-        The server receives a batch of bets from the client, stores it and sends an ACK message back to the client.
-        If the client closes the connection, the server logs the event and continues to accept new connections. Any other exceptions are logged as errors and an error message is sent back to the client.
+        The server receives messages from the client until the client closes the connection or an error occurs.
         Finally, the client socket is closed to free resources.
         """
         try:
             while self._running:
-                _, data = Protocol.receive_message(client_sock)
+                msgtype, data = Protocol.receive_message(client_sock)
 
-                batch = [Bet(*bet_line) for bet_line in data]
-                store_bets(batch)
-                logging.info(
-                    self.MSG_BATCH_RECEIVED_SUCCESS.format(cantidad=len(batch))
-                )
+                if msgtype == Protocol.MSG_TYPE_BATCH:
+                    self._handle_batch_and_send_ack(client_sock, data)
 
-                Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, [])
+                elif msgtype == Protocol.MSG_TYPE_EOF:
+                    self._handle_eof(data)
+                    break
+
+                elif msgtype == Protocol.MSG_TYPE_WINNERS_QUERY:
+                    self._handle_query_winners(client_sock, data)
+                    break
         except ConnectionClosedError:
             logging.info(
                 "action: connection_closed | result: success | msg: Client closed the connection"
@@ -68,7 +77,7 @@ class Server:
             try:
                 Protocol.send_message(client_sock, Protocol.MSG_TYPE_ERROR, [])
             finally:
-                logging.error(self.MSG_BATCH_RECEIVED_FAIL.format(cantidad=len(batch)))
+                logging.error(self.MSG_BATCH_RECEIVED_FAIL.format(cantidad=len(data)))
         finally:
             client_sock.close()
 
@@ -102,3 +111,51 @@ class Server:
         """
         if self._server_socket:
             self._server_socket.close()
+
+    def _handle_batch_and_send_ack(self, client_sock: socket, data: list[list[str]]):
+        """
+        Handle a batch of bets received from a client by storing the bets and sending an acknowledgment back to the client.
+        """
+        batch = [Bet(*bet_line) for bet_line in data]
+        store_bets(batch)
+        logging.info(self.MSG_BATCH_RECEIVED_SUCCESS.format(cantidad=len(batch)))
+
+        Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, [])
+
+    def _handle_eof(self, data: list[list[str]]):
+        """
+        Handle the end of a client's batch submission by marking the agency as finished and checking if the lottery can be finalized.
+        """
+        self._agencies_finished.add(data[0][0])
+
+        if (
+            len(self._agencies_finished) == self._total_agencies
+            and not self._lottery_done
+        ):
+            self._lottery_done = True
+            self._aggregate_winners_by_agency()
+            logging.info(self.MSG_LOTTERY_SUCCESS)
+
+    def _handle_query_winners(self, client_sock: socket, data: list[list[str]]):
+        """
+        Handle a query for the number of winners for a specific agency.
+        """
+        if not self._lottery_done:
+            Protocol.send_message(client_sock, Protocol.MSG_TYPE_WINNERS_NOT_READY, [])
+        else:
+            Protocol.send_message(
+                client_sock,
+                Protocol.MSG_TYPE_WINNERS,
+                [str(self._winners_by_agency[data[0][0]])],
+            )
+
+    def _aggregate_winners_by_agency(self):
+        """
+        Aggregate the winners by agency and store the results in a dictionary.
+        """
+        for agency in self._agencies_finished:
+            self._winners_by_agency[agency] = 0
+
+        for bet in load_bets():
+            if has_won(bet):
+                self._winners_by_agency[str(bet.agency)] += 1
