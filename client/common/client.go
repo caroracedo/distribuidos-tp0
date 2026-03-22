@@ -15,6 +15,8 @@ var log = logging.MustGetLogger("log")
 
 const CSVDelimiter = ","
 
+const MsgWinnersQuerySuccess = "action: consulta_ganadores | result: success | cant_ganadores: %s"
+
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
 	ID             string
@@ -78,6 +80,10 @@ func (c *Client) sendBatchAndReceive(batch [][]string) error {
 		return err
 	}
 
+	if responseType != MsgTypeAck && responseType != MsgTypeError {
+		return fmt.Errorf("Unexpected message type")
+	}
+
 	if responseType == MsgTypeError {
 		return fmt.Errorf("Server rejected batch")
 	}
@@ -85,12 +91,39 @@ func (c *Client) sendBatchAndReceive(batch [][]string) error {
 	return nil
 }
 
-// StartClientLoop Starts the client loop, which reads the data file and sends batches to the server. If a quit signal is received, the client will log the shutdown process and exit gracefully. If any error occurs during file reading or batch sending, it will be logged and the function will return immediately.
-func (c *Client) StartClientLoop(quit chan os.Signal) {
+// sendQueryWinnersAndReceive Sends a query to the server to check if the winners are ready. It waits for a response and returns true if the winners are ready, false otherwise. In case of failure, false is returned.
+func (c *Client) sendQueryWinnersAndReceive() (bool, error) {
+	if err := c.createClientSocket(); err != nil {
+		return false, err
+	}
+	defer c.closeClientSocket()
+
+	if err := SendMessage(c.conn, MsgTypeWinnersQuery, [][]string{{c.config.ID}}); err != nil {
+		return false, err
+	}
+
+	msgType, payload, err := ReceiveMessage(c.conn)
+	if err != nil {
+		return false, err
+	}
+
+	if msgType != MsgTypeWinners && msgType != MsgTypeWinnersNotReady {
+		return false, fmt.Errorf("Unexpected message type")
+	}
+
+	if msgType == MsgTypeWinnersNotReady {
+		return false, nil
+	}
+
+	log.Infof(MsgWinnersQuerySuccess, payload[0])
+	return true, nil
+}
+
+// sendBatchStage Reads the data file line by line, creates batches of data, and sends them to the server. It also listens for a quit signal to gracefully shut down the client. In case of failure, error is returned.
+func (c *Client) sendBatchStage(quit chan os.Signal) error {
 	file, err := os.Open(c.config.DataFile)
 	if err != nil {
-		log.Errorf("action: open_file | result: fail | client_id: %v | error: %v", c.config.ID, err)
-		return
+		return err
 	}
 	defer file.Close()
 
@@ -98,8 +131,7 @@ func (c *Client) StartClientLoop(quit chan os.Signal) {
 	var batch [][]string
 
 	if err := c.createClientSocket(); err != nil {
-		log.Errorf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
-		return
+		return err
 	}
 	defer c.closeClientSocket()
 
@@ -108,7 +140,7 @@ func (c *Client) StartClientLoop(quit chan os.Signal) {
 		case <-quit:
 			log.Infof("action: shutdown | result: in_progress | client_id: %v | msg: SIGTERM received", c.config.ID)
 			log.Infof("action: shutdown | result: success | client_id: %v", c.config.ID)
-			return
+			return nil
 		default:
 		}
 
@@ -122,8 +154,7 @@ func (c *Client) StartClientLoop(quit chan os.Signal) {
 
 		if len(batch) >= c.config.BatchMaxAmount {
 			if err := c.sendBatchAndReceive(batch); err != nil {
-				log.Errorf("action: send_batch_and_receive | result: fail | client_id: %v | error: %v", c.config.ID, err)
-				return
+				return err
 			}
 			batch = nil
 		}
@@ -131,8 +162,37 @@ func (c *Client) StartClientLoop(quit chan os.Signal) {
 
 	if len(batch) > 0 {
 		if err := c.sendBatchAndReceive(batch); err != nil {
-			log.Errorf("action: send_batch_and_receive | result: fail | client_id: %v | error: %v", c.config.ID, err)
+			return err
+		}
+	}
+
+	if err := SendMessage(c.conn, MsgTypeEOF, [][]string{{c.config.ID}}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// StartClientLoop Starts the client loop, which reads the data file and sends batches to the server.
+func (c *Client) StartClientLoop(quit chan os.Signal) {
+	if err := c.sendBatchStage(quit); err != nil {
+		log.Errorf("action: send_batch_stage | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return
+	}
+
+	for {
+		select {
+		case <-quit:
+			log.Infof("action: shutdown | result: in_progress | client_id: %v", c.config.ID)
+			log.Infof("action: shutdown | result: success | client_id: %v", c.config.ID)
 			return
+		case <-time.After(c.config.LoopPeriod):
+			stopFlag, err := c.sendQueryWinnersAndReceive()
+			if err != nil {
+				log.Warningf("action: query_winners | result: retry | client_id: %v | error: %v", c.config.ID, err)
+			} else if stopFlag {
+				return
+			}
 		}
 	}
 }

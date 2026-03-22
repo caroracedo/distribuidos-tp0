@@ -8,9 +8,13 @@ import (
 )
 
 const (
-	MsgTypeBatch uint16 = 1
-	MsgTypeAck   uint16 = 2
-	MsgTypeError uint16 = 3
+	MsgTypeBatch           uint16 = 1
+	MsgTypeAck             uint16 = 2
+	MsgTypeError           uint16 = 3
+	MsgTypeEOF             uint16 = 4
+	MsgTypeWinnersQuery    uint16 = 5
+	MsgTypeWinners         uint16 = 6
+	MsgTypeWinnersNotReady uint16 = 7
 
 	TypeBytes   = 2
 	LengthBytes = 4
@@ -21,7 +25,7 @@ const (
 
 // SendMessage Constructs and sends a message with the given type and data to the server. It returns an error if there was an issue sending the message.
 func SendMessage(conn net.Conn, msgType uint16, data [][]string) error {
-	if msgType != MsgTypeBatch {
+	if msgType != MsgTypeBatch && msgType != MsgTypeEOF && msgType != MsgTypeWinnersQuery {
 		return fmt.Errorf("Invalid message type: %d", msgType)
 	}
 
@@ -61,7 +65,7 @@ func ReceiveMessage(conn net.Conn) (uint16, []string, error) {
 		return 0, nil, err
 	}
 	msgType := binary.BigEndian.Uint16(msgTypeHeader)
-	if msgType != MsgTypeAck && msgType != MsgTypeError {
+	if msgType != MsgTypeAck && msgType != MsgTypeError && msgType != MsgTypeWinners && msgType != MsgTypeWinnersNotReady {
 		return 0, nil, fmt.Errorf("Invalid message type: %d", msgType)
 	}
 
