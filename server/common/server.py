@@ -1,28 +1,34 @@
 import socket
 import logging
+import signal
 
 
 class Server:
     def __init__(self, port, listen_backlog):
         # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._server_socket.bind(('', port))
+        self._server_socket.bind(("", port))
         self._server_socket.listen(listen_backlog)
+
+        # Add signal handler for graceful shutdown and a flag to control the server loop
+        self._running = True
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def run(self):
         """
-        Dummy Server loop
-
         Server that accept a new connections and establishes a
         communication with a client. After client with communucation
-        finishes, servers starts to accept new connections again
+        finishes, servers starts to accept new connections again.
+        The server loop can be stopped gracefully by sending a SIGTERM signal to the process.
         """
-
-        # TODO: Modify this program to handle signal to graceful shutdown
-        # the server
-        while True:
-            client_sock = self.__accept_new_connection()
-            self.__handle_client_connection(client_sock)
+        while self._running:
+            try:
+                client_sock = self.__accept_new_connection()
+                self.__handle_client_connection(client_sock)
+            except OSError:
+                if not self._running:
+                    break
+                raise
 
     def __handle_client_connection(self, client_sock):
         """
@@ -33,11 +39,13 @@ class Server:
         """
         try:
             # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
+            msg = client_sock.recv(1024).rstrip().decode("utf-8")
             addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            logging.info(
+                f"action: receive_message | result: success | ip: {addr[0]} | msg: {msg}"
+            )
             # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
+            client_sock.send("{}\n".format(msg).encode("utf-8"))
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {e}")
         finally:
@@ -52,7 +60,17 @@ class Server:
         """
 
         # Connection arrived
-        logging.info('action: accept_connections | result: in_progress')
+        logging.info("action: accept_connections | result: in_progress")
         c, addr = self._server_socket.accept()
-        logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
+        logging.info(f"action: accept_connections | result: success | ip: {addr[0]}")
         return c
+
+    def _handle_sigterm(self, *args):
+        """
+        Handle SIGTERM signal to gracefully shutdown the server.
+        """
+        logging.info("action: shutdown | result: in_progress | msg: SIGTERM received")
+        self._running = False
+        if self._server_socket:
+            self._server_socket.close()
+        logging.info("action: shutdown | result: success")

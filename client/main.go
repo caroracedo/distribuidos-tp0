@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"strings"
 	"time"
 
@@ -111,5 +113,10 @@ func main() {
 	}
 
 	client := common.NewClient(clientConfig)
-	client.StartClientLoop()
+
+	// Create a channel to receive SIGTERM signals. This channel will be passed to the client loop.
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	client.StartClientLoop(sigs)
 }
