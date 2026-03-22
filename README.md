@@ -347,29 +347,13 @@ make docker-compose-down
 
 #### Cómo ejecutar
 
-Antes de ejecutar, descargar y descomprimir los archivos de datos:
+Antes de ejecutar, se debe descargar y descomprimir los archivos de datos:
 
 ```bash
-unzip .data/datasets.zip -d .data/
+unzip .data/dataset.zip -d .data/
 ```
 
-Luego (asumiendo que ya se generó el archivo de Docker Compose con la cantidad de clientes deseada), ejecutar:
-
-```bash
-make docker-compose-up
-```
-
-Para visualizar los logs generados por el/los cliente/s y el servidor y verificar el correcto funcionamiento del protocolo, se puede ejecutar:
-
-```bash
-make docker-compose-logs
-```
-
-Finalmente, para detener los contenedores:
-
-```bash
-make docker-compose-down
-```
+Luego, el ejercicio 6 se ejecuta de la misma forma que el ejercicio anterior.
 
 #### Aspectos destacados de la solución
 
