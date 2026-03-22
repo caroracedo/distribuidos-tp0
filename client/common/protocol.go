@@ -8,22 +8,28 @@ import (
 )
 
 const (
-	MsgTypeBet uint16 = 1
-	MsgTypeAck uint16 = 2
+	MsgTypeBatch uint16 = 1
+	MsgTypeAck   uint16 = 2
+	MsgTypeError uint16 = 3
 
 	TypeBytes   = 2
 	LengthBytes = 4
 
 	PayloadDelimiter = ","
+	BatchDelimiter   = "\n"
 )
 
 // SendMessage Constructs and sends a message with the given type and data to the server. It returns an error if there was an issue sending the message.
-func SendMessage(conn net.Conn, msgType uint16, data []string) error {
-	if msgType != MsgTypeBet {
+func SendMessage(conn net.Conn, msgType uint16, data [][]string) error {
+	if msgType != MsgTypeBatch {
 		return fmt.Errorf("Invalid message type: %d", msgType)
 	}
 
-	payload := []byte(strings.Join(data, PayloadDelimiter))
+	parts := make([]string, len(data))
+	for i, d := range data {
+		parts[i] = strings.Join(d, PayloadDelimiter)
+	}
+	payload := []byte(strings.Join(parts, BatchDelimiter))
 
 	msgTypeHeader := make([]byte, TypeBytes)
 	binary.BigEndian.PutUint16(msgTypeHeader, msgType)
@@ -55,7 +61,7 @@ func ReceiveMessage(conn net.Conn) (uint16, []string, error) {
 		return 0, nil, err
 	}
 	msgType := binary.BigEndian.Uint16(msgTypeHeader)
-	if msgType != MsgTypeAck {
+	if msgType != MsgTypeAck && msgType != MsgTypeError {
 		return 0, nil, fmt.Errorf("Invalid message type: %d", msgType)
 	}
 

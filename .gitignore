@@ -6,3 +6,6 @@ bin/
 
 # Python
 __pycache__/
+
+# Development files
+*.csv

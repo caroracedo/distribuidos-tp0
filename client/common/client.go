@@ -1,8 +1,11 @@
 package common
 
 import (
+	"bufio"
+	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/op/go-logging"
@@ -10,19 +13,16 @@ import (
 
 var log = logging.MustGetLogger("log")
 
-const MsgBetSubmittedSuccess = "action: apuesta_enviada | result: success | dni: %s | numero: %s"
+const CSVDelimiter = ","
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID            string
-	ServerAddress string
-	LoopAmount    int
-	LoopPeriod    time.Duration
-	FirstName     string
-	LastName      string
-	Document      string
-	Birthdate     string
-	Number        string
+	ID             string
+	ServerAddress  string
+	LoopAmount     int
+	LoopPeriod     time.Duration
+	BatchMaxAmount int
+	DataFile       string
 }
 
 // Client Entity that encapsulates how
@@ -67,48 +67,71 @@ func (c *Client) closeClientSocket() error {
 	return c.conn.Close()
 }
 
-// sendBetAndReceiveAck Executes the client loop, which consists of sending a bet, receiving an acknowledgment, and logging the result. In case of any error during the process, it returns the error.
-func (c *Client) sendBetAndReceiveAck() error {
-	data := []string{
-		c.config.ID,
-		c.config.FirstName,
-		c.config.LastName,
-		c.config.Document,
-		c.config.Birthdate,
-		c.config.Number,
-	}
-	if err := SendMessage(c.conn, MsgTypeBet, data); err != nil {
+// sendBatchAndReceive Sends a batch of data to the server and waits for a response. In case of failure, an error is returned.
+func (c *Client) sendBatchAndReceive(batch [][]string) error {
+	if err := SendMessage(c.conn, MsgTypeBatch, batch); err != nil {
 		return err
 	}
 
-	_, _, err := ReceiveMessage(c.conn)
+	responseType, _, err := ReceiveMessage(c.conn)
 	if err != nil {
 		return err
 	}
 
-	log.Infof(MsgBetSubmittedSuccess, c.config.Document, c.config.Number)
+	if responseType == MsgTypeError {
+		return fmt.Errorf("Server rejected batch")
+	}
+
 	return nil
 }
 
-// StartClientLoop Starts the client loop, which consists of sending bets and receiving acknowledgments for a specified number of iterations (LoopAmount) with a delay between each iteration (LoopPeriod). The loop can be interrupted by receiving a signal on the quit channel, in which case it logs the shutdown process and exits gracefully.
+// StartClientLoop Starts the client loop, which reads the data file and sends batches to the server. If a quit signal is received, the client will log the shutdown process and exit gracefully. If any error occurs during file reading or batch sending, it will be logged and the function will return immediately.
 func (c *Client) StartClientLoop(quit chan os.Signal) {
+	file, err := os.Open(c.config.DataFile)
+	if err != nil {
+		log.Errorf("action: open_file | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var batch [][]string
+
 	if err := c.createClientSocket(); err != nil {
 		log.Errorf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
 		return
 	}
 	defer c.closeClientSocket()
 
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
-		if err := c.sendBetAndReceiveAck(); err != nil {
-			log.Errorf("action: send_bet_and_receive_ack | result: fail | client_id: %v | msg: %v", c.config.ID, err)
-			return
-		}
-
+	for scanner.Scan() {
 		select {
-		case <-time.After(c.config.LoopPeriod):
 		case <-quit:
 			log.Infof("action: shutdown | result: in_progress | client_id: %v | msg: SIGTERM received", c.config.ID)
 			log.Infof("action: shutdown | result: success | client_id: %v", c.config.ID)
+			return
+		default:
+		}
+
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		lineWithAgency := append([]string{c.config.ID}, strings.Split(line, CSVDelimiter)...)
+		batch = append(batch, lineWithAgency)
+
+		if len(batch) >= c.config.BatchMaxAmount {
+			if err := c.sendBatchAndReceive(batch); err != nil {
+				log.Errorf("action: send_batch_and_receive | result: fail | client_id: %v | error: %v", c.config.ID, err)
+				return
+			}
+			batch = nil
+		}
+	}
+
+	if len(batch) > 0 {
+		if err := c.sendBatchAndReceive(batch); err != nil {
+			log.Errorf("action: send_batch_and_receive | result: fail | client_id: %v | error: %v", c.config.ID, err)
 			return
 		}
 	}
