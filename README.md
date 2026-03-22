@@ -304,3 +304,37 @@ make docker-compose-down
 * Se implementó el manejo de la señal `SIGTERM` tanto en el cliente (mediante `signal.Notify()`, Go) como en el servidor (mediante `signal.signal()`, Python).
 * Se registran logs al recibir la señal y se garantiza que todos los recursos se liberen correctamente antes de que la aplicación finalice.
 * El flag `-t` en `docker compose down` da tiempo de gracia antes de enviar `SIGKILL`.
+
+### Ejercicio 5
+
+#### Cómo ejecutar
+
+Para ejecutar el ejercicio 5, se debe correr el siguiente comando desde la raíz del proyecto:
+
+```bash
+make docker-compose-up
+```
+
+Luego, para visualizar los logs generados por el/los cliente/s y el servidor y verificar el correcto funcionamiento del protocolo, se puede ejecutar:
+
+```bash
+make docker-compose-logs
+```
+
+#### Aspectos destacados de la solución
+
+* Se definió un protocolo de comunicación entre el cliente y el servidor para el envío de las apuestas, utilizando mensajes estructurados con un esquema *type-length-prefixed*, donde el header indica el tipo de mensaje y la longitud del payload:
+
+  ![Protocolo de Comunicación](protocolo_comunicacion.png)
+
+  El payload del mensaje contiene los campos de la apuesta separados por comas (`,`), siguiendo el formato: `Agencia,Nombre,Apellido,DNI,Fecha,Número`.
+
+  Actualmente, los tipos de mensaje definidos son:
+
+  * `MsgTypeBet/MSG_TYPE_BET`: envío de una apuesta
+  * `MsgTypeAck/MSG_TYPE_ACK`: confirmación de recepción
+
+  El diseño es extensible, permitiendo agregar nuevos tipos de mensaje sin modificar la estructura del protocolo.
+* Se implementó la serialización de los datos de las apuestas para su transmisión a través de sockets utilizando librerías estándar de cada lenguaje (ej: `encoding/binary` en Go).
+* Se mantuvo una clara separación de responsabilidades entre el modelo de dominio (representado por la clase `Bet`) y la capa de comunicación (manejada por el módulo `protocol`).
+* Se implementó un manejo robusto de sockets, incluyendo la gestión de errores y la prevención de los fenómenos de _short read_ y _short write_ mediante el uso de funciones que aseguran la lectura y escritura completa de los mensajes.
