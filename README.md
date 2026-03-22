@@ -342,3 +342,60 @@ make docker-compose-down
 * Se implementó la serialización de los datos de las apuestas para su transmisión a través de sockets utilizando librerías estándar de cada lenguaje (ej: `encoding/binary` en Go).
 * Se mantuvo una clara separación de responsabilidades entre el modelo de dominio (representado por la clase `Bet`) y la capa de comunicación (manejada por el módulo `protocol`).
 * Se implementó un manejo robusto de sockets, incluyendo la gestión de errores y la prevención de los fenómenos de _short read_ y _short write_ mediante el uso de funciones que aseguran la lectura y escritura completa de los mensajes. Además, se optimizó la red utilizando una única conexión persistente por cliente y se agregaron reintentos de conexión al servidor con un límite máximo (`LoopAmount`) y frecuencia (`LoopPeriod`) configurables.
+
+### Ejercicio 6
+
+#### Cómo ejecutar
+
+Antes de ejecutar, descargar y descomprimir los archivos de datos:
+
+```bash
+unzip .data/datasets.zip -d .data/
+```
+
+Luego (asumiendo que ya se generó el archivo de Docker Compose con la cantidad de clientes deseada), ejecutar:
+
+```bash
+make docker-compose-up
+```
+
+Para visualizar los logs generados por el/los cliente/s y el servidor y verificar el correcto funcionamiento del protocolo, se puede ejecutar:
+
+```bash
+make docker-compose-logs
+```
+
+Finalmente, para detener los contenedores:
+
+```bash
+make docker-compose-down
+```
+
+#### Aspectos destacados de la solución
+
+* Se agregaron dos tipos de mensaje al protocolo de comunicación:
+
+  * `MsgTypeBatch/MSG_TYPE_BATCH`: para el envío de un batch de apuestas.
+  * `MsgTypeError/MSG_TYPE_ERROR`: para la confirmación del procesamiento del batch.
+
+* La información de cada agencia se simula mediante la ingesta de archivos CSV provistos por la cátedra (`.data/datasets.zip`). Cada cliente N utiliza el archivo `.data/agency-{N}.csv`, inyectado en su contenedor y persistido mediante volúmenes de Docker.
+* El cliente procesa las apuestas leyendo estos archivos y agrupándolas en *batches* según el tamaño máximo configurado en `config.yaml`.
+* Para cumplir con la restricción de que los paquetes no excedan los **8kB** al enviar un *batch* de apuestas, se realizó una estimación estática del **tamaño máximo por apuesta**.
+
+  El protocolo implementado consiste en un header fijo y un payload de longitud variable:
+
+    * **Header:** 5 bytes en total (1 byte para el `Type` + 4 bytes para el `Length`).
+    * **Payload (datos de la apuesta):** los campos se envían como texto plano separados por comas (`,`), con la estructura: `Agencia,Nombre,Apellido,DNI,Fecha,Número`. Considerando un escenario pesimista:
+      * **Agencia:** 1 byte (valores del 1 al 5).
+      * **Nombre:** ~50 bytes.
+      * **Apellido:** ~50 bytes.
+      * **DNI:** 8 bytes.
+      * **Fecha:** 10 bytes (formato "YYYY-MM-DD").
+      * **Número:** 4 bytes.
+      * **Separadores:** 5 bytes (5 comas).
+
+  **Total máximo estimado por apuesta:** ~128 bytes.
+  
+  Para incorporar un margen de seguridad, se adopta un tamaño de **150 bytes por apuesta**.
+  En consecuencia, la **cantidad máxima de apuestas por batch** es **⌊8192 / 150⌋ = 54**, garantizando no exceder el límite de 8 kB.
+* El servidor responde con éxito únicamente si todas las apuestas de un *batch* fueron procesadas correctamente.
