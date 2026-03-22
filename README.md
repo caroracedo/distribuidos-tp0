@@ -309,7 +309,7 @@ make docker-compose-down
 
 #### Cómo ejecutar
 
-Para ejecutar el ejercicio 5, se debe correr el siguiente comando desde la raíz del proyecto:
+Para ejecutar el ejercicio 5 (asumiendo que ya se generó el archivo de Docker Compose con la cantidad de clientes deseada), se debe correr el siguiente comando desde la raíz del proyecto:
 
 ```bash
 make docker-compose-up
@@ -319,6 +319,12 @@ Luego, para visualizar los logs generados por el/los cliente/s y el servidor y v
 
 ```bash
 make docker-compose-logs
+```
+
+Finalmente, para detener los contenedores:
+
+```bash
+make docker-compose-down
 ```
 
 #### Aspectos destacados de la solución
