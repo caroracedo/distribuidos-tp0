@@ -56,7 +56,7 @@ class Protocol:
     @staticmethod
     def send_message(sock: socket, msgtype: int, data: str) -> None:
         """
-        Construct and sends a message with the given type and payload to the socket.
+        Construct and sends a message with the given type and data to the socket.
         """
         if msgtype != Protocol.MSG_TYPE_ACK:
             raise ProtocolError(f"Invalid message type: {msgtype}")

@@ -1,7 +1,7 @@
 import socket
 import logging
 import signal
-from .protocol import Protocol
+from .protocol import Protocol, ConnectionClosedError
 from .utils import Bet, store_bets
 
 
@@ -42,19 +42,27 @@ class Server:
     def __handle_client_connection(self, client_sock: socket) -> None:
         """
         Handle communication with a connected client.
-        It receives a bet from the client, stores it, and sends an acknowledgment back to the client. If any error occurs during this process, it logs the error and ensures the client socket is closed.
+        The server receives a bet from the client, stores it and sends an ACK message back to the client.
+        If the client closes the connection, the server logs the event and continues to accept new connections. Any other exceptions are logged as errors.
+        Finally, the client socket is closed to free resources.
         """
         try:
-            _, data = Protocol.receive_message(client_sock)
+            while self._running:
+                _, data = Protocol.receive_message(client_sock)
 
-            bet = Bet(*data.split(Protocol.PAYLOAD_DELIMITER))
+                bet = Bet(*data.split(Protocol.PAYLOAD_DELIMITER))
+                store_bets([bet])
+                logging.info(
+                    self.MSG_BET_STORED_SUCCESS.format(
+                        dni=bet.document, numero=bet.number
+                    )
+                )
 
-            store_bets([bet])
+                Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, "")
+        except ConnectionClosedError:
             logging.info(
-                self.MSG_BET_STORED_SUCCESS.format(dni=bet.document, numero=bet.number)
+                "action: connection_closed | result: success | msg: Client closed the connection"
             )
-
-            Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, "")
         except Exception as e:
             logging.error(
                 f"action: receive_bet_and_send_ack | result: fail | error: {e}"

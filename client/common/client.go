@@ -11,7 +11,7 @@ import (
 
 var log = logging.MustGetLogger("log")
 
-const MsgBetSubmittedSuccess = "action: apuesta_enviada | result: success | dni: %s | numero: %d"
+const MsgBetSubmittedSuccess = "action: apuesta_enviada | result: success | dni: %s | numero: %s"
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -70,11 +70,6 @@ func (c *Client) closeClientSocket() error {
 
 // sendBetAndReceiveAck Executes the client loop, which consists of sending a bet, receiving an acknowledgment, and logging the result. In case of any error during the process, it returns the error.
 func (c *Client) sendBetAndReceiveAck() error {
-	if err := c.createClientSocket(); err != nil {
-		return err
-	}
-	defer c.closeClientSocket()
-
 	data := strings.Join([]string{
 		c.config.ID,
 		c.config.FirstName,
@@ -98,9 +93,15 @@ func (c *Client) sendBetAndReceiveAck() error {
 
 // StartClientLoop Starts the client loop, which consists of sending bets and receiving acknowledgments for a specified number of iterations (LoopAmount) with a delay between each iteration (LoopPeriod). The loop can be interrupted by receiving a signal on the quit channel, in which case it logs the shutdown process and exits gracefully.
 func (c *Client) StartClientLoop(quit chan os.Signal) {
+	if err := c.createClientSocket(); err != nil {
+		log.Errorf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return
+	}
+	defer c.closeClientSocket()
+
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		if err := c.sendBetAndReceiveAck(); err != nil {
-			log.Errorf("action: send_bet_and_receive_ack | result: failure | client_id: %v | msg: %v", c.config.ID, err)
+			log.Errorf("action: send_bet_and_receive_ack | result: fail | client_id: %v | msg: %v", c.config.ID, err)
 			return
 		}
 
