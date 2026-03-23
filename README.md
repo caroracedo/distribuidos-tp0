@@ -333,11 +333,9 @@ make docker-compose-down
 
   ![Protocolo de Comunicación](protocolo_comunicacion.png)
 
-  El payload del mensaje contiene los campos de la apuesta separados por comas (`,`), siguiendo el formato: `Agencia,Nombre,Apellido,DNI,Fecha,Número`.
-
   Actualmente, los tipos de mensaje definidos son:
 
-  * `MsgTypeBet/MSG_TYPE_BET`: envío de una apuesta
+  * `MsgTypeBet/MSG_TYPE_BET`: envío de una apuesta. El payload del mensaje contiene los campos de la apuesta separados por comas (`,`), siguiendo el formato: `Agencia,Nombre,Apellido,DNI,Fecha,Número`.
   * `MsgTypeAck/MSG_TYPE_ACK`: confirmación de recepción
 
   El diseño es extensible, permitiendo agregar nuevos tipos de mensaje sin modificar la estructura del protocolo.
