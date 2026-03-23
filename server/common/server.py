@@ -1,6 +1,7 @@
 import socket
 import logging
 import signal
+import threading
 from .protocol import Protocol, ConnectionClosedError
 from .utils import Bet, store_bets, load_bets, has_won
 
@@ -25,24 +26,31 @@ class Server:
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
         # Add attributes to track the state of the lottery
-        self._client_sockets = {}
-        self._agencies_finished = 0
-        self._lottery_done = False
         self._winners_by_agency = {}
         self._total_agencies = total_agencies
 
+        # Add concurrency primitives to handle multiple clients simultaneously
+        self._lottery_barrier = threading.Barrier(
+            total_agencies, action=self._run_lottery
+        )
+        self._file_lock = threading.Lock()
+        self._client_threads = []
+
     def run(self):
         """
-        Server that accept a new connections and establishes a
-        communication with a client. After client with communucation
-        finishes, servers starts to accept new connections again.
-        The server loop can be stopped gracefully by sending a SIGTERM signal to the process.
+        Server that accepts new connections and handles each client in a separate thread.
+        Multiple clients can be served concurrently. The server loop can be stopped gracefully by sending a SIGTERM signal to the process.
+        All client threads are joined before shutdown.
         """
         try:
             while self._running:
                 try:
                     client_sock = self.__accept_new_connection()
-                    self.__handle_client_connection(client_sock)
+                    client_thread = threading.Thread(
+                        target=self.__handle_client_connection, args=(client_sock,)
+                    )
+                    self._client_threads.append(client_thread)
+                    client_thread.start()
                 except OSError:
                     if not self._running:
                         break
@@ -68,19 +76,18 @@ class Server:
 
                 elif msgtype == Protocol.MSG_TYPE_WINNERS_QUERY:
                     self._handle_winners_query(client_sock, data)
-                    break
         except ConnectionClosedError:
             logging.info(
                 "action: connection_closed | result: success | msg: Client closed the connection"
             )
         except Exception as e:
+            self._lottery_barrier.abort()
             try:
                 Protocol.send_message(client_sock, Protocol.MSG_TYPE_ERROR, [])
             finally:
                 logging.error(self.MSG_BATCH_RECEIVED_FAIL.format(cantidad=len(data)))
         finally:
-            if client_sock not in self._client_sockets:
-                client_sock.close()
+            client_sock.close()
 
     def __accept_new_connection(self):
         """
@@ -104,6 +111,7 @@ class Server:
         self._running = False
         if self._server_socket:
             self._server_socket.close()
+        self._lottery_barrier.abort()
         logging.info("action: shutdown | result: success")
 
     def _free_resources(self):
@@ -113,74 +121,51 @@ class Server:
         if self._server_socket:
             self._server_socket.close()
 
-        for client_socket in self._client_sockets.keys():
-            client_socket.close()
-        self._client_sockets.clear()
+        for client_thread in self._client_threads:
+            client_thread.join()
 
     def _handle_batch_and_send_ack(self, client_sock: socket, data: list[list[str]]):
         """
-        Handle a batch of bets received from a client by storing the bets and sending an acknowledgment back to the client.
+        Handle a batch of bets received from a client by storing the bets and sending an acknowledgment.
+        Thread-safe storage is ensured using a lock to prevent concurrent access conflicts.
         """
         batch = [Bet(*bet_line) for bet_line in data]
-        store_bets(batch)
+        with self._file_lock:
+            store_bets(batch)
         logging.info(self.MSG_BATCH_RECEIVED_SUCCESS.format(cantidad=len(batch)))
 
         Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, [])
 
     def _handle_eof(self, data: list[list[str]]):
         """
-        Handle the end of a client's batch submission by marking the agency as finished and checking if the lottery can be finalized.
+        Handle the end of a client's batch submission by waiting at the lottery barrier until all agencies have reached it.
         """
-        self._agencies_finished += 1
-
-        if self._agencies_finished == self._total_agencies and not self._lottery_done:
-            self._run_lottery()
-            self._broadcast_remaining_winners()
+        self._lottery_barrier.wait()
 
     def _handle_winners_query(self, client_sock: socket, data: list[list[str]]):
         """
         Handle a query for the list of winners for a specific agency.
+        Thread-safe access to shared state is ensured using a lock.
         """
-        if self._lottery_done:
-            Protocol.send_message(
-                client_sock,
-                Protocol.MSG_TYPE_WINNERS,
-                self._winners_by_agency[data[0][0]],
-            )
-        else:
-            self._client_sockets[client_sock] = data[0][0]
+        Protocol.send_message(
+            client_sock,
+            Protocol.MSG_TYPE_WINNERS,
+            self._winners_by_agency[data[0][0]],
+        )
 
     def _run_lottery(self):
         """
         Run the lottery by determining the winners for each agency based on the stored bets.
+        Thread-safe access to the bets is ensured using a lock to prevent concurrent access conflicts.
+        This function will be executed by one of the threads when all agencies have reached the barrier.
         """
-        self._lottery_done = True
         logging.info(self.MSG_LOTTERY_SUCCESS)
 
-        for bet in load_bets():
-            agency_id = str(bet.agency)
-            if agency_id not in self._winners_by_agency:
-                self._winners_by_agency[agency_id] = []
+        with self._file_lock:
+            for bet in load_bets():
+                agency_id = str(bet.agency)
+                if agency_id not in self._winners_by_agency:
+                    self._winners_by_agency[agency_id] = []
 
-            if has_won(bet):
-                self._winners_by_agency[agency_id] += [bet.document]
-
-    def _broadcast_remaining_winners(self):
-        """
-        Broadcast the respective winners to all clients that have queried for it but haven't received a response yet.
-        After broadcasting, all client sockets are closed to free resources.
-        """
-        for client_socket, agency_id in self._client_sockets.items():
-            try:
-                Protocol.send_message(
-                    client_socket,
-                    Protocol.MSG_TYPE_WINNERS,
-                    self._winners_by_agency[agency_id],
-                )
-            except Exception as e:
-                logging.error(
-                    f"action: broadcast_remaining_winners | result: fail | error: {e}"
-                )
-            finally:
-                client_socket.close()
-        self._client_sockets.clear()
+                if has_won(bet):
+                    self._winners_by_agency[agency_id] += [bet.document]
