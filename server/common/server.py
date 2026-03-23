@@ -50,7 +50,7 @@ class Server:
             while self._running:
                 _, data = Protocol.receive_message(client_sock)
 
-                bet = Bet(*data.split(Protocol.PAYLOAD_DELIMITER))
+                bet = Bet(*data)
                 store_bets([bet])
                 logging.info(
                     self.MSG_BET_STORED_SUCCESS.format(
@@ -58,7 +58,7 @@ class Server:
                     )
                 )
 
-                Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, "")
+                Protocol.send_message(client_sock, Protocol.MSG_TYPE_ACK, [])
         except ConnectionClosedError:
             logging.info(
                 "action: connection_closed | result: success | msg: Client closed the connection"

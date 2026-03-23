@@ -3,7 +3,6 @@ package common
 import (
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/op/go-logging"
@@ -70,14 +69,14 @@ func (c *Client) closeClientSocket() error {
 
 // sendBetAndReceiveAck Executes the client loop, which consists of sending a bet, receiving an acknowledgment, and logging the result. In case of any error during the process, it returns the error.
 func (c *Client) sendBetAndReceiveAck() error {
-	data := strings.Join([]string{
+	data := []string{
 		c.config.ID,
 		c.config.FirstName,
 		c.config.LastName,
 		c.config.Document,
 		c.config.Birthdate,
 		c.config.Number,
-	}, PayloadDelimiter)
+	}
 	if err := SendMessage(c.conn, MsgTypeBet, data); err != nil {
 		return err
 	}

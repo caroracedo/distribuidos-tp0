@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 )
 
 const (
@@ -17,12 +18,12 @@ const (
 )
 
 // SendMessage Constructs and sends a message with the given type and data to the server. It returns an error if there was an issue sending the message.
-func SendMessage(conn net.Conn, msgType uint16, data string) error {
+func SendMessage(conn net.Conn, msgType uint16, data []string) error {
 	if msgType != MsgTypeBet {
 		return fmt.Errorf("Invalid message type: %d", msgType)
 	}
 
-	payload := []byte(data)
+	payload := []byte(strings.Join(data, PayloadDelimiter))
 
 	msgTypeHeader := make([]byte, TypeBytes)
 	binary.BigEndian.PutUint16(msgTypeHeader, msgType)
@@ -38,36 +39,40 @@ func SendMessage(conn net.Conn, msgType uint16, data string) error {
 		return err
 	}
 
-	if err := sendAll(conn, payload); err != nil {
-		return err
+	if len(payload) > 0 {
+		if err := sendAll(conn, payload); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 // ReceiveMessage Reads a message from the server, returning the message type, payload, and any error encountered.
-func ReceiveMessage(conn net.Conn) (uint16, string, error) {
+func ReceiveMessage(conn net.Conn) (uint16, []string, error) {
 	msgTypeHeader := make([]byte, TypeBytes)
 	if err := receiveAll(conn, msgTypeHeader); err != nil {
-		return 0, "", err
+		return 0, nil, err
 	}
 	msgType := binary.BigEndian.Uint16(msgTypeHeader)
 	if msgType != MsgTypeAck {
-		return 0, "", fmt.Errorf("Invalid message type: %d", msgType)
+		return 0, nil, fmt.Errorf("Invalid message type: %d", msgType)
 	}
 
 	lengthHeader := make([]byte, LengthBytes)
 	if err := receiveAll(conn, lengthHeader); err != nil {
-		return 0, "", err
+		return 0, nil, err
 	}
 	length := binary.BigEndian.Uint32(lengthHeader)
 
 	payload := make([]byte, length)
-	if err := receiveAll(conn, payload); err != nil {
-		return 0, "", err
+	if length > 0 {
+		if err := receiveAll(conn, payload); err != nil {
+			return 0, nil, err
+		}
 	}
 
-	return msgType, string(payload), nil
+	return msgType, strings.Split(string(payload), PayloadDelimiter), nil
 }
 
 // sendAll Is a helper to avoid short writes. It ensures that all bytes in the data slice are sent over the connection, returning an error if any write operation fails.

@@ -34,7 +34,7 @@ class Protocol:
         return data
 
     @staticmethod
-    def receive_message(sock: socket) -> tuple[int, str]:
+    def receive_message(sock: socket) -> tuple[int, list[str]]:
         """
         Reads a message from the socket, returning a tuple of (msgtype, payload).
         """
@@ -51,17 +51,17 @@ class Protocol:
             data = Protocol.recv_all(sock, length)
             payload = data.decode("utf-8")
 
-        return msgtype, payload
+        return msgtype, payload.split(Protocol.PAYLOAD_DELIMITER)
 
     @staticmethod
-    def send_message(sock: socket, msgtype: int, data: str) -> None:
+    def send_message(sock: socket, msgtype: int, data: list[str]) -> None:
         """
         Construct and sends a message with the given type and data to the socket.
         """
         if msgtype != Protocol.MSG_TYPE_ACK:
             raise ProtocolError(f"Invalid message type: {msgtype}")
 
-        payload = data.encode("utf-8")
+        payload = Protocol.PAYLOAD_DELIMITER.join(data).encode("utf-8")
 
         msg_type_header = msgtype.to_bytes(
             Protocol.TYPE_BYTES, byteorder="big", signed=False
