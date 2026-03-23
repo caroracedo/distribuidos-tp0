@@ -400,3 +400,15 @@ Luego, el ejercicio 6 se ejecuta de la misma forma que el ejercicio anterior.
 
 * Después de notificar su finalización mediante `MsgTypeEOF`, el cliente envía inmediatamente un `MsgTypeWinnersQuery` y se queda bloqueado esperando la respuesta en esa misma conexión persistente. Este proceso finaliza cuando el servidor envía el mensaje `MsgTypeWinners` con la información, momento en el cual el cliente imprime el log correspondiente, cierra la conexión y finaliza.
 * El servidor espera la notificación `MsgTypeEOF` de las 5 agencias para considerar que se realizó el sorteo. Si un cliente envía el `MsgTypeWinnersQuery` antes de que el sorteo finalice, el servidor mantiene la conexión TCP abierta y en espera en lugar de rechazarla. Una vez que llega la última agencia, el servidor verifica cada apuesta con las funciones `load_bets(...)` y `has_won(...)`, y realiza un envío de los resultados a todos los clientes que se encontraban aguardando en sus respectivas conexiones.
+
+### Ejercicio 8
+
+#### Cómo ejecutar
+
+> La forma de ejecución es idéntica a la del ejercicio 7.
+
+#### Aspectos destacados de la solución
+
+* Se implementó concurrencia mediante **multithreading** (un hilo por cliente), aprovechando la liberación del GIL en operaciones de I/O. Los hilos se sincronizan al cierre del servidor mediante _join_ para garantizar una finalización ordenada (_graceful shutdown_).
+* Se introdujo una **barrera de sincronización** (`threading.Barrier`) para coordinar el fin de la transmisión (`EOF`). Esto garantiza que el sorteo se ejecute automáticamente solo cuando todas las agencias finalizaron su carga.
+* Se utiliza un **`threading.Lock()`** para proteger de _race conditions_ el acceso concurrente a disco (al guardar y cargar apuestas). El lock se adquiere estrictamente durante estas operaciones y se libera antes de interactuar con la red.
