@@ -359,7 +359,7 @@ Luego, el ejercicio 6 se ejecuta de la misma forma que el ejercicio anterior.
 
 * Se agregaron dos tipos de mensaje al protocolo de comunicación:
 
-  * `MsgTypeBatch/MSG_TYPE_BATCH`: para el envío de un batch de apuestas.
+  * `MsgTypeBatch/MSG_TYPE_BATCH`: para el envío de un batch de apuestas. Cada batch contiene varias apuestas agrupadas, con los campos de cada apuesta separados por comas (`,`), y cada apuesta separada por un salto de línea (`\n`).
   * `MsgTypeError/MSG_TYPE_ERROR`: para la confirmación del procesamiento del batch.
 
 * La información de cada agencia se simula mediante la ingesta de archivos CSV provistos por la cátedra (`.data/datasets.zip`). Cada cliente N utiliza el archivo `.data/agency-{N}.csv`, inyectado en su contenedor y persistido mediante volúmenes de Docker.
