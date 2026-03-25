@@ -25,7 +25,8 @@ class Server:
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
         # Add attributes to track the state of the lottery
-        self._agencies_finished = set()
+        self._client_sockets = {}
+        self._agencies_finished = 0
         self._lottery_done = False
         self._winners_by_agency = {}
         self._total_agencies = total_agencies
@@ -64,10 +65,9 @@ class Server:
 
                 elif msgtype == Protocol.MSG_TYPE_EOF:
                     self._handle_eof(data)
-                    break
 
                 elif msgtype == Protocol.MSG_TYPE_WINNERS_QUERY:
-                    self._handle_query_winners(client_sock, data)
+                    self._handle_winners_query(client_sock, data)
                     break
         except ConnectionClosedError:
             logging.info(
@@ -79,7 +79,8 @@ class Server:
             finally:
                 logging.error(self.MSG_BATCH_RECEIVED_FAIL.format(cantidad=len(data)))
         finally:
-            client_sock.close()
+            if client_sock not in self._client_sockets:
+                client_sock.close()
 
     def __accept_new_connection(self):
         """
@@ -112,6 +113,10 @@ class Server:
         if self._server_socket:
             self._server_socket.close()
 
+        for client_socket in self._client_sockets.keys():
+            client_socket.close()
+        self._client_sockets.clear()
+
     def _handle_batch_and_send_ack(self, client_sock: socket, data: list[list[str]]):
         """
         Handle a batch of bets received from a client by storing the bets and sending an acknowledgment back to the client.
@@ -126,36 +131,56 @@ class Server:
         """
         Handle the end of a client's batch submission by marking the agency as finished and checking if the lottery can be finalized.
         """
-        self._agencies_finished.add(data[0][0])
+        self._agencies_finished += 1
 
-        if (
-            len(self._agencies_finished) == self._total_agencies
-            and not self._lottery_done
-        ):
-            self._lottery_done = True
-            self._aggregate_winners_by_agency()
-            logging.info(self.MSG_LOTTERY_SUCCESS)
+        if self._agencies_finished == self._total_agencies and not self._lottery_done:
+            self._run_lottery()
+            self._broadcast_remaining_winners()
 
-    def _handle_query_winners(self, client_sock: socket, data: list[list[str]]):
+    def _handle_winners_query(self, client_sock: socket, data: list[list[str]]):
         """
-        Handle a query for the number of winners for a specific agency.
+        Handle a query for the list of winners for a specific agency.
         """
-        if not self._lottery_done:
-            Protocol.send_message(client_sock, Protocol.MSG_TYPE_WINNERS_NOT_READY, [])
-        else:
+        if self._lottery_done:
             Protocol.send_message(
                 client_sock,
                 Protocol.MSG_TYPE_WINNERS,
                 self._winners_by_agency[data[0][0]],
             )
+        else:
+            self._client_sockets[client_sock] = data[0][0]
 
-    def _aggregate_winners_by_agency(self):
+    def _run_lottery(self):
         """
-        Aggregate the winners by agency and store the results in a dictionary.
+        Run the lottery by determining the winners for each agency based on the stored bets.
         """
-        for agency in self._agencies_finished:
-            self._winners_by_agency[agency] = []
+        self._lottery_done = True
+        logging.info(self.MSG_LOTTERY_SUCCESS)
 
         for bet in load_bets():
+            agency_id = str(bet.agency)
+            if agency_id not in self._winners_by_agency:
+                self._winners_by_agency[agency_id] = []
+
             if has_won(bet):
-                self._winners_by_agency[str(bet.agency)] += [bet.document]
+                self._winners_by_agency[agency_id] += [bet.document]
+
+    def _broadcast_remaining_winners(self):
+        """
+        Broadcast the respective winners to all clients that have queried for it but haven't received a response yet.
+        After broadcasting, all client sockets are closed to free resources.
+        """
+        for client_socket, agency_id in self._client_sockets.items():
+            try:
+                Protocol.send_message(
+                    client_socket,
+                    Protocol.MSG_TYPE_WINNERS,
+                    self._winners_by_agency[agency_id],
+                )
+            except Exception as e:
+                logging.error(
+                    f"action: broadcast_remaining_winners | result: fail | error: {e}"
+                )
+            finally:
+                client_socket.close()
+        self._client_sockets.clear()

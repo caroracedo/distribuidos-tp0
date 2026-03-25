@@ -17,7 +17,6 @@ class Protocol:
     MSG_TYPE_EOF = 4
     MSG_TYPE_WINNERS_QUERY = 5
     MSG_TYPE_WINNERS = 6
-    MSG_TYPE_WINNERS_NOT_READY = 7
 
     TYPE_BYTES = 2
     LENGTH_BYTES = 4
@@ -74,7 +73,6 @@ class Protocol:
         if msgtype not in (
             Protocol.MSG_TYPE_ACK,
             Protocol.MSG_TYPE_ERROR,
-            Protocol.MSG_TYPE_WINNERS_NOT_READY,
             Protocol.MSG_TYPE_WINNERS,
         ):
             raise ProtocolError(f"Invalid message type: {msgtype}")

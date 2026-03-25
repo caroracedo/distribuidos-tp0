@@ -8,13 +8,12 @@ import (
 )
 
 const (
-	MsgTypeBatch           uint16 = 1
-	MsgTypeAck             uint16 = 2
-	MsgTypeError           uint16 = 3
-	MsgTypeEOF             uint16 = 4
-	MsgTypeWinnersQuery    uint16 = 5
-	MsgTypeWinners         uint16 = 6
-	MsgTypeWinnersNotReady uint16 = 7
+	MsgTypeBatch        uint16 = 1
+	MsgTypeAck          uint16 = 2
+	MsgTypeError        uint16 = 3
+	MsgTypeEOF          uint16 = 4
+	MsgTypeWinnersQuery uint16 = 5
+	MsgTypeWinners      uint16 = 6
 
 	TypeBytes   = 2
 	LengthBytes = 4
@@ -65,7 +64,7 @@ func ReceiveMessage(conn net.Conn) (uint16, []string, error) {
 		return 0, nil, err
 	}
 	msgType := binary.BigEndian.Uint16(msgTypeHeader)
-	if msgType != MsgTypeAck && msgType != MsgTypeError && msgType != MsgTypeWinners && msgType != MsgTypeWinnersNotReady {
+	if msgType != MsgTypeAck && msgType != MsgTypeError && msgType != MsgTypeWinners {
 		return 0, nil, fmt.Errorf("Invalid message type: %d", msgType)
 	}
 

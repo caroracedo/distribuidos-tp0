@@ -91,28 +91,19 @@ func (c *Client) sendBatchAndReceive(batch [][]string) error {
 	return nil
 }
 
-// sendQueryWinnersAndReceive Sends a query to the server to check if the winners are ready. It waits for a response and returns true if the winners are ready, false otherwise. In case of failure, false is returned.
-func (c *Client) sendQueryWinnersAndReceive() (bool, error) {
-	if err := c.createClientSocket(); err != nil {
-		return false, err
-	}
-	defer c.closeClientSocket()
-
+// sendWinnersQueryAndReceive Sends a query to the server to check if the winners are ready. It waits for a response and returns true if the winners are ready, false otherwise. In case of failure, false is returned.
+func (c *Client) sendWinnersQueryAndReceive() error {
 	if err := SendMessage(c.conn, MsgTypeWinnersQuery, [][]string{{c.config.ID}}); err != nil {
-		return false, err
+		return err
 	}
 
 	msgType, data, err := ReceiveMessage(c.conn)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	if msgType != MsgTypeWinners && msgType != MsgTypeWinnersNotReady {
-		return false, fmt.Errorf("Unexpected message type")
-	}
-
-	if msgType == MsgTypeWinnersNotReady {
-		return false, nil
+	if msgType != MsgTypeWinners {
+		return fmt.Errorf("Unexpected message type")
 	}
 
 	log.Infof(MsgWinnersQuerySuccess, len(data))
@@ -129,11 +120,6 @@ func (c *Client) sendBatchStage(quit chan os.Signal) error {
 
 	scanner := bufio.NewScanner(file)
 	var batch [][]string
-
-	if err := c.createClientSocket(); err != nil {
-		return err
-	}
-	defer c.closeClientSocket()
 
 	for scanner.Scan() {
 		select {
@@ -175,24 +161,19 @@ func (c *Client) sendBatchStage(quit chan os.Signal) error {
 
 // StartClientLoop Starts the client loop, which reads the data file and sends batches to the server.
 func (c *Client) StartClientLoop(quit chan os.Signal) {
+	if err := c.createClientSocket(); err != nil {
+		log.Errorf("action: create_client_socket | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return
+	}
+	defer c.closeClientSocket()
+
 	if err := c.sendBatchStage(quit); err != nil {
 		log.Errorf("action: send_batch_stage | result: fail | client_id: %v | error: %v", c.config.ID, err)
 		return
 	}
 
-	for {
-		select {
-		case <-quit:
-			log.Infof("action: shutdown | result: in_progress | client_id: %v", c.config.ID)
-			log.Infof("action: shutdown | result: success | client_id: %v", c.config.ID)
-			return
-		case <-time.After(c.config.LoopPeriod):
-			stopFlag, err := c.sendQueryWinnersAndReceive()
-			if err != nil {
-				log.Warningf("action: query_winners | result: retry | client_id: %v | error: %v", c.config.ID, err)
-			} else if stopFlag {
-				return
-			}
-		}
+	if err := c.sendWinnersQueryAndReceive(); err != nil {
+		log.Errorf("action: send_query_winners | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return
 	}
 }
