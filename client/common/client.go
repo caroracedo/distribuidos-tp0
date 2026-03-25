@@ -15,7 +15,7 @@ var log = logging.MustGetLogger("log")
 
 const CSVDelimiter = ","
 
-const MsgWinnersQuerySuccess = "action: consulta_ganadores | result: success | cant_ganadores: %s"
+const MsgWinnersQuerySuccess = "action: consulta_ganadores | result: success | cant_ganadores: %d"
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -102,7 +102,7 @@ func (c *Client) sendQueryWinnersAndReceive() (bool, error) {
 		return false, err
 	}
 
-	msgType, payload, err := ReceiveMessage(c.conn)
+	msgType, data, err := ReceiveMessage(c.conn)
 	if err != nil {
 		return false, err
 	}
@@ -115,8 +115,8 @@ func (c *Client) sendQueryWinnersAndReceive() (bool, error) {
 		return false, nil
 	}
 
-	log.Infof(MsgWinnersQuerySuccess, payload[0])
-	return true, nil
+	log.Infof(MsgWinnersQuerySuccess, len(data))
+	return nil
 }
 
 // sendBatchStage Reads the data file line by line, creates batches of data, and sends them to the server. It also listens for a quit signal to gracefully shut down the client. In case of failure, error is returned.

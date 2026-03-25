@@ -146,7 +146,7 @@ class Server:
             Protocol.send_message(
                 client_sock,
                 Protocol.MSG_TYPE_WINNERS,
-                [str(self._winners_by_agency[data[0][0]])],
+                self._winners_by_agency[data[0][0]],
             )
 
     def _aggregate_winners_by_agency(self):
@@ -154,8 +154,8 @@ class Server:
         Aggregate the winners by agency and store the results in a dictionary.
         """
         for agency in self._agencies_finished:
-            self._winners_by_agency[agency] = 0
+            self._winners_by_agency[agency] = []
 
         for bet in load_bets():
             if has_won(bet):
-                self._winners_by_agency[str(bet.agency)] += 1
+                self._winners_by_agency[str(bet.agency)] += [bet.document]
