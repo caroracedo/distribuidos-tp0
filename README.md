@@ -383,3 +383,20 @@ Luego, el ejercicio 6 se ejecuta de la misma forma que el ejercicio anterior.
   Para incorporar un margen de seguridad, se adopta un tamaño de **150 bytes por apuesta**.
   En consecuencia, la **cantidad máxima de apuestas por batch** es **⌊8192 / 150⌋ = 54**, garantizando no exceder el límite de 8 kB.
 * El servidor responde con éxito únicamente si todas las apuestas de un *batch* fueron procesadas correctamente.
+
+### Ejercicio 7
+
+#### Cómo ejecutar
+
+> La forma de ejecución es idéntica a la del ejercicio 6.
+
+#### Aspectos destacados de la solución
+
+* Se agregaron tres tipos de mensaje adicionales al protocolo de comunicación:
+
+  * `MsgTypeEOF/MSG_TYPE_EOF`: para que un cliente notifique al servidor que ha finalizado el envío de un batch de apuestas. El contenido incluye la agencia correspondiente.
+  * `MsgTypeWinnersQuery/MSG_TYPE_WINNERS_QUERY`: para que un cliente consulte al servidor la lista de ganadores de su agencia. El contenido incluye la agencia correspondiente.
+  * `MsgTypeWinners/MSG_TYPE_WINNERS`: para que el servidor responda con la lista de ganadores de una agencia. El contenido incluye los DNI de los ganadores separados por comas (`,`).
+
+* Después de notificar su finalización mediante `MsgTypeEOF`, el cliente envía inmediatamente un `MsgTypeWinnersQuery` y se queda bloqueado esperando la respuesta en esa misma conexión persistente. Este proceso finaliza cuando el servidor envía el mensaje `MsgTypeWinners` con la información, momento en el cual el cliente imprime el log correspondiente, cierra la conexión y finaliza.
+* El servidor espera la notificación `MsgTypeEOF` de las 5 agencias para considerar que se realizó el sorteo. Si un cliente envía el `MsgTypeWinnersQuery` antes de que el sorteo finalice, el servidor mantiene la conexión TCP abierta y en espera en lugar de rechazarla. Una vez que llega la última agencia, el servidor verifica cada apuesta con las funciones `load_bets(...)` y `has_won(...)`, y realiza un envío de los resultados a todos los clientes que se encontraban aguardando en sus respectivas conexiones.
