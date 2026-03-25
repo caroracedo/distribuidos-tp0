@@ -46,12 +46,12 @@ class Protocol:
         length_header = Protocol.recv_all(sock, Protocol.LENGTH_BYTES)
         length = int.from_bytes(length_header, byteorder="big", signed=False)
 
-        payload = ""
-        if length > 0:
-            data = Protocol.recv_all(sock, length)
-            payload = data.decode("utf-8")
+        if length == 0:
+            return msgtype, []
 
-        return msgtype, payload.split(Protocol.PAYLOAD_DELIMITER)
+        payload = Protocol.recv_all(sock, length)
+        data = payload.decode("utf-8")
+        return msgtype, data.split(Protocol.PAYLOAD_DELIMITER)
 
     @staticmethod
     def send_message(sock: socket, msgtype: int, data: list[str]) -> None:

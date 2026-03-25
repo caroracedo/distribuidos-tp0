@@ -65,11 +65,13 @@ func ReceiveMessage(conn net.Conn) (uint16, []string, error) {
 	}
 	length := binary.BigEndian.Uint32(lengthHeader)
 
+	if length == 0 {
+		return msgType, []string{}, nil
+	}
+
 	payload := make([]byte, length)
-	if length > 0 {
-		if err := receiveAll(conn, payload); err != nil {
-			return 0, nil, err
-		}
+	if err := receiveAll(conn, payload); err != nil {
+		return 0, nil, err
 	}
 
 	return msgType, strings.Split(string(payload), PayloadDelimiter), nil
