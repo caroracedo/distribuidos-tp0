@@ -21,14 +21,17 @@ class Server:
         finishes, servers starts to accept new connections again.
         The server loop can be stopped gracefully by sending a SIGTERM signal to the process.
         """
-        while self._running:
-            try:
-                client_sock = self.__accept_new_connection()
-                self.__handle_client_connection(client_sock)
-            except OSError:
-                if not self._running:
-                    break
-                raise
+        try:
+            while self._running:
+                try:
+                    client_sock = self.__accept_new_connection()
+                    self.__handle_client_connection(client_sock)
+                except OSError:
+                    if not self._running:
+                        break
+                    raise
+        finally:
+            self._free_resources()
 
     def __handle_client_connection(self, client_sock):
         """
@@ -74,3 +77,10 @@ class Server:
         if self._server_socket:
             self._server_socket.close()
         logging.info("action: shutdown | result: success")
+
+    def _free_resources(self):
+        """
+        Free server resources, such as closing the server socket.
+        """
+        if self._server_socket:
+            self._server_socket.close()

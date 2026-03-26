@@ -289,8 +289,8 @@ docker kill -s SIGTERM $(docker ps -q -f "name=server")
 # Para un cliente específico
 docker kill -s SIGTERM $(docker ps -q -f "name=client<N>")
 
-# Para ambos a la vez utilizando un timeout de 10 segundos antes de enviar SIGKILL
-docker compose -f docker-compose-dev.yaml down -t 10
+# Para ambos a la vez utilizando un timeout de <TIMEOUT> segundos antes de enviar SIGKILL
+docker compose -f <COMPOSE_FILE> down -t <TIMEOUT>
 ```
 
 Finalmente, para detener los contenedores:
