@@ -331,7 +331,7 @@ make docker-compose-down
 
 * Se definió un protocolo de comunicación entre el cliente y el servidor para el envío de las apuestas, utilizando mensajes estructurados con un esquema *type-length-prefixed*, donde el header indica el tipo de mensaje y la longitud del payload:
 
-  ![Protocolo de Comunicación](protocolo_comunicacion.png)
+  ![Protocolo de Comunicación](images/protocolo_comunicacion.png)
 
   Actualmente, los tipos de mensaje definidos son:
 
@@ -412,3 +412,8 @@ Luego, el ejercicio 6 se ejecuta de la misma forma que el ejercicio anterior.
 * Se implementó concurrencia mediante **multithreading** (un hilo por cliente), aprovechando la liberación del GIL en operaciones de I/O. Los hilos se sincronizan al cierre del servidor mediante _join_ para garantizar una finalización ordenada (_graceful shutdown_).
 * Se introdujo una **barrera de sincronización** (`threading.Barrier`) para coordinar el fin de la transmisión (`EOF`). Esto garantiza que el sorteo se ejecute automáticamente solo cuando todas las agencias finalizaron su carga.
 * Se utiliza un **`threading.Lock()`** para proteger de _race conditions_ el acceso concurrente a disco (al guardar y cargar apuestas). El lock se adquiere estrictamente durante estas operaciones y se libera antes de interactuar con la red.
+
+### Resultados de los tests
+
+![Resultados de los tests](images/resultados_tests.png)
+
